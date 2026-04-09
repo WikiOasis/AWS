@@ -914,7 +914,18 @@ class AmazonS3FileBackend extends FileBackendStore {
 	 * @phan-param $params array{noAccess?:bool,noListing?:bool,access?:bool,listing?:bool}
 	 */
 	protected function doPrepareInternal( $container, $dir, array $params ) {
-		[ $bucket, $prefix ] = $this->findContainer( $container );
+		$containerInfo = $this->findContainer( $container );
+		if ( $containerInfo === null ) {
+			return Status::newGood();
+		}
+		[ $bucket, $prefix ] = $containerInfo;
+
+		$garageManager = \MediaWiki\MediaWikiServices::getInstance()
+			->get( 'WikiOasisMagic.GarageManager' );
+		if ( !$garageManager->createBucket( $bucket ) ) {
+			return Status::newFatal( 'backend-fail-internal', $this->name );
+		}
+
 		$dir = $prefix . $dir;
 
 		$this->logger->debug(
@@ -968,6 +979,9 @@ class AmazonS3FileBackend extends FileBackendStore {
 		if ( !empty( $params['access'] ) && $this->isSecure( $container ) ) {
 			// Container is currently secure, but $params say that it should be public.
 			[ $bucket, $restrictFile ] = $this->getRestrictFilePath( $container );
+			if ( $bucket === null ) {
+				return Status::newGood();
+			}
 
 			$this->logger->debug(
 				'S3FileBackend: doPublishInternal: deleting {file} from S3 bucket {bucket}',
@@ -1009,6 +1023,9 @@ class AmazonS3FileBackend extends FileBackendStore {
 		if ( !empty( $params['noAccess'] ) && !$this->isSecure( $container ) ) {
 			// Container is currently public, but $params say that it should be secure.
 			[ $bucket, $restrictFile ] = $this->getRestrictFilePath( $container );
+			if ( $bucket === null ) {
+				return Status::newGood();
+			}
 
 			$this->logger->debug(
 				'S3FileBackend: doSecureInternal: creating {file} in S3 bucket {bucket}',
@@ -1078,6 +1095,9 @@ class AmazonS3FileBackend extends FileBackendStore {
 
 		// Not found in cache. Determine from S3: if ".htsecure" file is present, then secure.
 		[ $bucket, $restrictFile ] = $this->getRestrictFilePath( $container );
+		if ( $bucket === null ) {
+			return false;
+		}
 
 		$this->logger->debug(
 			'S3FileBackend: isSecure: checking the presence of {file} in S3 bucket {bucket}',
