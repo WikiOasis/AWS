@@ -565,7 +565,11 @@ class AmazonS3FileBackend extends FileBackendStore {
 			$dir .= '/';
 		}
 
-		[ $bucket, $prefix ] = $this->findContainer( $container );
+		$containerInfo = $this->findContainer( $container );
+		if ( $containerInfo === null ) {
+			return false;
+		}
+		[ $bucket, $prefix ] = $containerInfo;
 		$dir = $prefix . $dir;
 
 		$this->logger->debug(
