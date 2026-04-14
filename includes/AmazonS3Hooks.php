@@ -108,7 +108,10 @@ class AmazonS3Hooks {
 			$wgLocalFileRepo['zones'][$zone] = $zoneConf;
 		}
 
-		$wgFileBackends['s3']['containerPaths'] = $containerPaths;
+		$wgFileBackends['s3']['containerPaths'] = array_merge(
+			$wgFileBackends['s3']['containerPaths'] ?? [],
+			$containerPaths
+		);
 	}
 
 	/**
