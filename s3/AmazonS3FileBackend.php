@@ -250,14 +250,28 @@ class AmazonS3FileBackend extends FileBackendStore {
 
 		// $containerPath can be either "BucketName" or "BucketName/dir1/dir2".
 		// In latter case, "dir1/dir2/" will be prepended to $filename.
-		$containerPath = $this->containerPaths[$container];
+		// Leading slashes would otherwise produce an empty bucket name.
+		$containerPath = ltrim( $this->containerPaths[$container], '/' );
 		$firstSlashPos = strpos( $containerPath, '/' );
 		if ( $firstSlashPos === false ) {
-			return [ $containerPath, "" ];
+			$bucket = $containerPath;
+			$prefix = "";
+		} else {
+			$prefix = substr( $containerPath, $firstSlashPos + 1 );
+			$bucket = substr( $containerPath, 0, $firstSlashPos );
 		}
 
-		$prefix = substr( $containerPath, $firstSlashPos + 1 );
-		$bucket = substr( $containerPath, 0, $firstSlashPos );
+		if ( $bucket === '' ) {
+			$this->logger->warning(
+				'S3FileBackend: findContainer(): container {container} has invalid path {path}' .
+				' (no S3 bucket name)',
+				[
+					'container' => $container,
+					'path' => $this->containerPaths[$container]
+				]
+			);
+			return null; // Misconfigured
+		}
 
 		if ( $prefix && substr( $prefix, -1 ) !== '/' ) {
 			$prefix .= '/'; # Add trailing slash, e.g. "thumb/".
@@ -695,7 +709,7 @@ class AmazonS3FileBackend extends FileBackendStore {
 	 */
 	public function getFileHttpUrl( array $params ) {
 		[ $bucket, $key, ] = $this->getBucketAndObject( $params['src'] );
-		if ( $bucket === null ) {
+		if ( $bucket === null || $bucket === '' ) {
 			return null;
 		}
 
@@ -983,7 +997,7 @@ class AmazonS3FileBackend extends FileBackendStore {
 		if ( !empty( $params['access'] ) && $this->isSecure( $container ) ) {
 			// Container is currently secure, but $params say that it should be public.
 			[ $bucket, $restrictFile ] = $this->getRestrictFilePath( $container );
-			if ( $bucket === null ) {
+			if ( $bucket === null || $bucket === '' ) {
 				return Status::newGood();
 			}
 
@@ -1027,7 +1041,7 @@ class AmazonS3FileBackend extends FileBackendStore {
 		if ( !empty( $params['noAccess'] ) && !$this->isSecure( $container ) ) {
 			// Container is currently public, but $params say that it should be secure.
 			[ $bucket, $restrictFile ] = $this->getRestrictFilePath( $container );
-			if ( $bucket === null ) {
+			if ( $bucket === null || $bucket === '' ) {
 				return Status::newGood();
 			}
 
@@ -1099,7 +1113,7 @@ class AmazonS3FileBackend extends FileBackendStore {
 
 		// Not found in cache. Determine from S3: if ".htsecure" file is present, then secure.
 		[ $bucket, $restrictFile ] = $this->getRestrictFilePath( $container );
-		if ( $bucket === null ) {
+		if ( $bucket === null || $bucket === '' ) {
 			return false;
 		}
 
